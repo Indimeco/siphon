@@ -41,11 +41,6 @@ fn is_published(tags: HashMap<&str, &str>) -> bool {
     r
 }
 
-fn trace<T: core::fmt::Debug + core::fmt::Display>(x: T) -> T {
-    println!("{:#?}", x);
-    x
-}
-
 fn get_tags(contents: &str) -> Result<HashMap<&str, &str>, &str> {
     let separator = "---";
     let mut tag_indicators = contents.match_indices(separator);
@@ -65,7 +60,6 @@ fn get_tags(contents: &str) -> Result<HashMap<&str, &str>, &str> {
         Some(s) => s,
         None => return Err("No tags"),
     };
-    trace(tags);
 
     let lines = tags
         .trim()
@@ -78,9 +72,61 @@ fn get_tags(contents: &str) -> Result<HashMap<&str, &str>, &str> {
     Ok(lines)
 }
 
+fn aggregate_collections<'a, 'b>(
+    name: &'a str,
+    collections: Vec<&'b str>,
+    mut aggregate: HashMap<&'b str, Vec<&'a str>>,
+) -> HashMap<&'b str, Vec<&'a str>> {
+    for c in collections {
+        let mut collection_to_update: Vec<&str> = match aggregate.get(c) {
+            Some(existing) => existing.clone(),
+            None => {
+                let something: Vec<&str> = Vec::new();
+                something
+            }
+        };
+        collection_to_update.push(name);
+        aggregate.insert(c, collection_to_update);
+    }
+    aggregate
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod aggregate_collections {
+        use super::*;
+        #[test]
+        fn create_new_aggregate() {
+            let file_name_1 = "goat";
+            let file_collections_1 = vec!["animal"];
+            let result = aggregate_collections(file_name_1, file_collections_1, HashMap::new());
+            assert_eq!(result.get("animal").unwrap()[0], "goat");
+        }
+
+        #[test]
+        fn add_to_aggregate() {
+            let file_name_1 = "goat";
+            let file_collections_1 = vec!["animal"];
+            let result = aggregate_collections(file_name_1, file_collections_1, HashMap::new());
+
+            let file_name_2 = "horse";
+            let file_collections_2 = vec!["animal"];
+            let result_2 = aggregate_collections(file_name_2, file_collections_2, result);
+            assert_eq!(result_2.get("animal").unwrap().len(), 2);
+            assert_eq!(result_2.get("animal").unwrap().contains(&"horse"), true);
+            assert_eq!(result_2.get("animal").unwrap().contains(&"goat"), true);
+        }
+
+        #[test]
+        fn add_multi_collection_to_aggregate() {
+            let file_name_1 = "goat";
+            let file_collections_1 = vec!["animal", "pet", "horned"];
+            let result = aggregate_collections(file_name_1, file_collections_1, HashMap::new());
+            assert_eq!(result.get("animal").unwrap()[0], "goat");
+            assert_eq!(result.get("pet").unwrap()[0], "goat");
+            assert_eq!(result.get("horned").unwrap()[0], "goat");
+        }
+    }
 
     mod get_tags {
         use super::*;
