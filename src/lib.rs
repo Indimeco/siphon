@@ -1,17 +1,45 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::io;
+use std::path;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(config.path)?;
-    let tags = get_tags(&contents);
-    println!("{:#?}", tags);
+    let path = path::Path::new(&config.path);
+    visit_dirs(path, &|entry: &fs::DirEntry| {
+        let path = entry.path();
+
+        let contents = fs::read_to_string(path.clone()).unwrap();
+        let tags = get_tags(&contents).unwrap();
+        if is_published(tags) {
+            println!("{:#?} is published", path.clone());
+        } else {
+            println!("{:#?} is not published", path.clone());
+        }
+    });
 
     // get all files
     // get tags for all files
     // filter out unpublished files
     // create collections from published files
+    // write collections to new files
 
+    Ok(())
+}
+
+// taken from std::fs::read_dir docs
+fn visit_dirs(dir: &path::Path, cb: &dyn Fn(&fs::DirEntry)) -> io::Result<()> {
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                visit_dirs(&path, cb)?;
+            } else {
+                cb(&entry);
+            }
+        }
+    }
     Ok(())
 }
 
