@@ -1,22 +1,54 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::hash::Hash;
 use std::io;
 use std::path;
+use walkdir::WalkDir;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    // TODO cleanup
     let path = path::Path::new(&config.path);
-    visit_dirs(path, &|entry: &fs::DirEntry| {
-        let path = entry.path();
+    let mut collection_aggregator: HashMap<&str, Vec<&str>> = HashMap::new();
 
-        let contents = fs::read_to_string(path.clone()).unwrap();
-        let tags = get_tags(&contents).unwrap();
-        if is_published(tags) {
-            println!("{:#?} is published", path.clone());
-        } else {
-            println!("{:#?} is not published", path.clone());
-        }
-    });
+    let collections: HashMap<String, String> = WalkDir::new(config.path)
+        .into_iter()
+        .filter_map(|f| {
+            let a = f.unwrap();
+            // TODO skip directories
+            let r = fs::read_to_string(a.path()).unwrap();
+            let t = get_tags(&r).unwrap();
+            if is_published(&t) {
+                return Some(t);
+            } else {
+                return None;
+            }
+        })
+        .flatten() // huh, not sure why I need this atm, was it nested?
+        .collect();
+
+    dbg!(collections);
+
+    // visit_dirs(path, &|entry: &fs::DirEntry| {
+    //     let path = entry.path();
+
+    //     let contents = fs::read_to_string(path.clone()).unwrap();
+    //     let tags = get_tags(&contents).unwrap();
+    //     if is_published(&tags) {
+    //         let collections = tags.get("collections");
+    //         match collections {
+    //             Some(c) => {
+    //                 let parsed_collections = parse_collections(c);
+    //                 let copy_shit = collection_aggregator.clone();
+
+    //                 collection_aggregator =
+    //                     aggregate_collections("horseshit", parsed_collections, copy_shit);
+    //                 ()
+    //             }
+    //             None => (),
+    //         };
+    //     }
+    // });
 
     // get all files
     // get tags for all files
@@ -25,6 +57,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // write collections to new files
 
     Ok(())
+}
+
+fn parse_collections(raw: &str) -> Vec<&str> {
+    raw.trim().split(' ').collect()
 }
 
 // taken from std::fs::read_dir docs
@@ -61,7 +97,7 @@ impl Config {
     }
 }
 
-fn is_published(tags: HashMap<&str, &str>) -> bool {
+fn is_published(tags: &HashMap<String, String>) -> bool {
     let r = match tags.get("publish") {
         Some(v) => *v == "true",
         None => false,
@@ -69,7 +105,7 @@ fn is_published(tags: HashMap<&str, &str>) -> bool {
     r
 }
 
-fn get_tags(contents: &str) -> Result<HashMap<&str, &str>, &str> {
+fn get_tags(contents: &str) -> Result<HashMap<String, String>, &'static str> {
     let separator = "---";
     let mut tag_indicators = contents.match_indices(separator);
     let tag_start = match tag_indicators.next() {
@@ -94,8 +130,8 @@ fn get_tags(contents: &str) -> Result<HashMap<&str, &str>, &str> {
         .lines()
         .map(|l| l.split(":").map(|v| v.trim()).collect::<Vec<&str>>())
         // TODO this will produce unintuitive error messages
-        .map(|a| (*a.get(0).unwrap(), *a.get(1).unwrap()))
-        .collect::<HashMap<&str, &str>>();
+        .map(|a| (a.get(0).unwrap().to_string(), a.get(1).unwrap().to_string()))
+        .collect::<HashMap<String, String>>();
 
     Ok(lines)
 }
