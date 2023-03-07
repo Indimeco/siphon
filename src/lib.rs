@@ -1,3 +1,4 @@
+use alloc::collections;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
@@ -13,6 +14,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             }
             let r = fs::read_to_string(a.path()).unwrap();
             let t = get_tags(&r).unwrap();
+            // skip unpublished poems
             if is_published(&t) {
                 let collections = parse_collections(t.get("collections").unwrap());
                 return Some((
@@ -30,13 +32,15 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             },
         );
 
-    dbg!(collections);
+    for collection in collections {
+        // look for existing collection files
+        // read collection files for title, desc, etc
+        // create CollectionData struct, default missing collection files values
+        // create_collection_template
+        // write file to where? needs a target dir I guess
+    }
 
-    // get all files
-    // get tags for all files
-    // filter out unpublished files
-    // create collections from published files
-    // write collections to new files
+    dbg!(collections);
 
     Ok(())
 }
@@ -120,6 +124,38 @@ fn aggregate_collections<'a, 'b>(
     }
     aggregate
 }
+
+struct CollectionData {
+    title: String,
+    created: String,
+    poems: Vec<String>,
+    desc: String,
+}
+
+fn create_collection_template(data: CollectionData) -> String {
+    let CollectionData {
+        title,
+        created,
+        poems,
+        desc,
+    } = data;
+    let formatted_poems = poems
+        .iter()
+        .map(|f| format!("- {f}"))
+        .collect::<Vec<String>>()
+        .join("\n");
+    format!(
+        "---
+title: {title}
+created: {created}
+poems:
+{formatted_poems}
+---
+{desc}
+"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,6 +268,29 @@ tag2: rabbit
             let result = get_tags(contents).unwrap();
             assert_eq!(*result.get("tag").unwrap(), "duck goat sheep chicken");
             assert_eq!(*result.get("tag2").unwrap(), "rabbit");
+        }
+    }
+    mod template_collection {
+        use super::*;
+
+        #[test]
+        fn creates_template_from_collection() {
+            let collection = CollectionData {
+                title: String::from("collection title"),
+                created: String::from("2023-03-08"),
+                poems: vec![String::from("name1")],
+                desc: String::from("A description of the contents"),
+            };
+            let expected = "\
+---
+title: collection title
+created: 2023-03-08
+poems:
+- name1
+---
+A description of the contents
+";
+            assert_eq!(create_collection_template(collection), expected);
         }
     }
 }
