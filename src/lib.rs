@@ -1,4 +1,3 @@
-use alloc::collections;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
@@ -32,13 +31,23 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             },
         );
 
-    for collection in collections {
-        // look for existing collection files
-        // read collection files for title, desc, etc
-        // create CollectionData struct, default missing collection files values
-        // create_collection_template
-        // write file to where? needs a target dir I guess
-    }
+
+    // let existing_collections = WalkDir::new(config.target_dir);
+    // let merged_collections = collections.map(|c|{
+    //     let f = existing_collections.get(c); // need by name
+    //     let file_name = f.unwrap().file_name().to_str().unwrap();
+    //     let merge = match collections.get(file_name) {
+    //         Some(collection) => ...,
+    //         None => None,
+    //     }
+    // })
+    // for collection in collections {
+    //     // look for existing collection files
+    //     // read collection files for title, desc, etc
+    //     // create CollectionData struct, default missing collection files values
+    //     // create_collection_template
+    //     // write file to where? needs a target dir I guess
+    // }
 
     dbg!(collections);
 
@@ -48,6 +57,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 pub struct Config {
     pub dryrun: bool,
     pub path: String,
+    pub target_dir: String,
 }
 
 impl Config {
@@ -58,8 +68,20 @@ impl Config {
             None => return Err("Path not specfied"),
         };
 
+        let target_dir = match args.next() {
+            Some(q) => q,
+            None => return Err("Target dir not specified"),
+        };
+
         // TODO Read dryrun from args somehow
-        Ok(Config { path, dryrun: true })
+        Ok(Config { path, dryrun: true, target_dir })
+    }
+}
+
+fn update_collection_poems(collection: CollectionData, poems: Vec<String>) -> CollectionData {
+    CollectionData {
+        poems,
+        ..collection
     }
 }
 
@@ -125,6 +147,8 @@ fn aggregate_collections<'a, 'b>(
     aggregate
 }
 
+#[derive(Debug)]
+#[derive(PartialEq)]
 struct CollectionData {
     title: String,
     created: String,
@@ -159,6 +183,27 @@ poems:
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod update_collection_poems {
+        use super::*;
+        #[test]
+        fn adds_poems_to_collection(){
+            let col: CollectionData = CollectionData {
+                title: String::from("collection title"),
+                created: String::from("2023-03-08"),
+                poems: vec![String::from("name1")],
+                desc: String::from("A description of the contents"),
+            };
+            let poems: Vec<String> = vec![String::from("name1"), String::from("name2")];
+            let expected: CollectionData = CollectionData {
+                title: String::from("collection title"),
+                created: String::from("2023-03-08"),
+                poems: vec![String::from("name1"), String::from("name2")],
+                desc: String::from("A description of the contents"),
+            };
+            assert_eq!(update_collection_poems(col, poems), expected);
+        }
+    }
+
     mod aggregate_collections {
         use super::*;
         #[test]
