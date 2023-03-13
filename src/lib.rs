@@ -1,7 +1,9 @@
+use glob::glob;
 use regex::RegexBuilder;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::path::PathBuf;
 use walkdir::WalkDir;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
@@ -32,24 +34,30 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             },
         );
 
-    // let existing_collections = WalkDir::new(config.target_dir);
-    // let merged_collections = collections.map(|c|{
-    //     let f = existing_collections.get(c); // need by name
-    //     let file_name = f.unwrap().file_name().to_str().unwrap();
-    //     let merge = match collections.get(file_name) {
-    //         Some(collection) => ...,
-    //         None => None,
-    //     }
-    // })
-    // for collection in collections {
-    //     // look for existing collection files
-    //     // read collection files for title, desc, etc
-    //     // create CollectionData struct, default missing collection files values
-    //     // create_collection_template
-    //     // write file to where? needs a target dir I guess
-    // }
+    let collection_data = collections.iter().map(|(collection_name, poems)| {
+        let path = format!("**/{collection_name}.md");
+        let existing_collections = glob(&path)
+            .expect("Failed to read glob pattern")
+            .map(|x| x.unwrap())
+            .collect::<Vec<PathBuf>>();
+        if existing_collections.len() > 1 {
+            panic!("More than one collection named {collection_name}");
+        }
+        if existing_collections.len() < 1 {
+            panic!("Did not find collection named {collection_name}");
+        }
+        let a = &existing_collections[0];
+        let b = fs::read_to_string(a).unwrap();
+        let parsed_collection = parse_collection_template(&b);
+        let updated_collection = update_collection_poems(parsed_collection, poems.clone());
+        return updated_collection;
+    });
 
-    dbg!(collections);
+    let templates: String = collection_data.map(create_collection_template).collect();
+
+    // write file to dir
+
+    dbg!(templates);
 
     Ok(())
 }
