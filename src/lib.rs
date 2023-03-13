@@ -1,3 +1,4 @@
+use regex::Regex;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
@@ -30,7 +31,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 aggregate_collections(name, collections, acc)
             },
         );
-
 
     // let existing_collections = WalkDir::new(config.target_dir);
     // let merged_collections = collections.map(|c|{
@@ -74,7 +74,11 @@ impl Config {
         };
 
         // TODO Read dryrun from args somehow
-        Ok(Config { path, dryrun: true, target_dir })
+        Ok(Config {
+            path,
+            dryrun: true,
+            target_dir,
+        })
     }
 }
 
@@ -97,6 +101,7 @@ fn is_published(tags: &HashMap<String, String>) -> bool {
     r
 }
 
+// aka crappy yaml parser
 fn get_tags(contents: &str) -> Result<HashMap<String, String>, &'static str> {
     let separator = "---";
     let mut tag_indicators = contents.match_indices(separator);
@@ -121,8 +126,33 @@ fn get_tags(contents: &str) -> Result<HashMap<String, String>, &'static str> {
         .trim()
         .lines()
         .map(|l| l.split(":").map(|v| v.trim()).collect::<Vec<&str>>())
-        // TODO this will produce unintuitive error messages
-        .map(|a| (a.get(0).unwrap().to_string(), a.get(1).unwrap().to_string()))
+        .fold(vec![], |mut acc: Vec<(String, String)>, cur| {
+            let before_colon = cur.get(0).unwrap();
+            let list_indicator = "- ";
+            // lmao this is awful
+            if before_colon.starts_with(list_indicator) {
+                let last_value = acc.pop().unwrap();
+                let trimmed_list_value: &str = before_colon
+                    .split(list_indicator)
+                    .collect::<Vec<&str>>()
+                    .get(1)
+                    .unwrap();
+
+                // a traumatic description of pain
+                if last_value.1 == "" {
+                    acc.push((last_value.0, last_value.1 + trimmed_list_value));
+                } else {
+                    acc.push((last_value.0, last_value.1 + ", " + trimmed_list_value));
+                }
+                return acc;
+            } else {
+                // push a new acc item
+                let after_colon = cur.get(1).unwrap().to_string();
+                acc.push((String::from(*before_colon), String::from(after_colon)));
+                return acc;
+            }
+        })
+        .into_iter()
         .collect::<HashMap<String, String>>();
 
     Ok(lines)
@@ -147,8 +177,7 @@ fn aggregate_collections<'a, 'b>(
     aggregate
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 struct CollectionData {
     title: String,
     created: String,
@@ -180,13 +209,27 @@ poems:
     )
 }
 
+fn parse_collection_template(raw: &str) -> CollectionData {
+    let tags = get_tags(raw).unwrap();
+    let desc: &str = Regex::new("---.*---").unwrap().replace_all(raw); // everything except tags
+    CollectionData {
+        title: String::from(tags.get("title").unwrap()),
+        created: String::from(tags.get("created").unwrap()),
+        poems: tags
+            .get("poems")
+            .map(|x| parse_collections(x))
+            .unwrap_or(vec![]),
+        desc: String::from(desc),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     mod update_collection_poems {
         use super::*;
         #[test]
-        fn adds_poems_to_collection(){
+        fn adds_poems_to_collection() {
             let col: CollectionData = CollectionData {
                 title: String::from("collection title"),
                 created: String::from("2023-03-08"),
@@ -314,6 +357,19 @@ tag2: rabbit
             assert_eq!(*result.get("tag").unwrap(), "duck goat sheep chicken");
             assert_eq!(*result.get("tag2").unwrap(), "rabbit");
         }
+
+        #[test]
+        fn list_tags() {
+            let contents = "\
+---
+tag:
+- list1
+- list2
+---
+";
+            let result = get_tags(contents).unwrap();
+            assert_eq!(*result.get("tag").unwrap(), "list1, list2");
+        }
     }
     mod template_collection {
         use super::*;
@@ -336,6 +392,47 @@ poems:
 A description of the contents
 ";
             assert_eq!(create_collection_template(collection), expected);
+        }
+    }
+
+    mod parse_collection_template {
+        use super::*;
+
+        #[test]
+        fn parses_partial_collection() {
+            let template = "\
+---
+title: collection title
+created: 2023-03-08
+---
+";
+            let expected = CollectionData {
+                title: String::from("collection title"),
+                created: String::from("2023-03-08"),
+                poems: vec![],
+                desc: String::from(""),
+            };
+            assert_eq!(parse_collection_template(template), expected);
+        }
+
+        #[test]
+        fn parses_full_template() {
+            let template = "\
+---
+title: collection title
+created: 2023-03-08
+poems:
+- name1
+---
+A description of the contents
+";
+            let expected = CollectionData {
+                title: String::from("collection title"),
+                created: String::from("2023-03-08"),
+                poems: vec![String::from("name1")],
+                desc: String::from("A description of the contents"),
+            };
+            assert_eq!(parse_collection_template(template), expected);
         }
     }
 }
