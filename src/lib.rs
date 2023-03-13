@@ -1,4 +1,4 @@
-use regex::Regex;
+use regex::RegexBuilder;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
@@ -211,7 +211,11 @@ poems:
 
 fn parse_collection_template(raw: &str) -> CollectionData {
     let tags = get_tags(raw).unwrap();
-    let desc: &str = Regex::new("---.*---").unwrap().replace_all(raw); // everything except tags
+    let r = RegexBuilder::new("---.*---")
+        .dot_matches_new_line(true)
+        .build()
+        .unwrap();
+    let desc = String::from(r.replace_all(raw, "").trim()); // everything except tags
     CollectionData {
         title: String::from(tags.get("title").unwrap()),
         created: String::from(tags.get("created").unwrap()),
@@ -219,7 +223,7 @@ fn parse_collection_template(raw: &str) -> CollectionData {
             .get("poems")
             .map(|x| parse_collections(x))
             .unwrap_or(vec![]),
-        desc: String::from(desc),
+        desc: desc,
     }
 }
 
