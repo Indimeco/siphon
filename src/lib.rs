@@ -46,18 +46,19 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         if existing_collections.len() < 1 {
             panic!("Did not find collection named {collection_name}");
         }
-        let a = &existing_collections[0];
-        let b = fs::read_to_string(a).unwrap();
-        let parsed_collection = parse_collection_template(&b);
+        let existing_contents = fs::read_to_string(&existing_collections[0]).unwrap();
+        let parsed_collection = parse_collection_template(&existing_contents);
         let updated_collection = update_collection_poems(parsed_collection, poems.clone());
-        return updated_collection;
+        return (collection_name, updated_collection);
     });
 
-    let templates: String = collection_data.map(create_collection_template).collect();
-
-    // write file to dir
-
-    dbg!(templates);
+    collection_data.for_each(|(collection_name, collection_data)| {
+        let template = create_collection_template(collection_data);
+        let mut target_path = PathBuf::from(&config.target_dir).join(collection_name);
+        target_path.set_extension("md");
+        dbg!(template.clone());
+        fs::write(target_path, template).unwrap();
+    });
 
     Ok(())
 }
@@ -212,6 +213,7 @@ created: {created}
 poems:
 {formatted_poems}
 ---
+
 {desc}
 "
     )
@@ -401,6 +403,7 @@ created: 2023-03-08
 poems:
 - name1
 ---
+
 A description of the contents
 ";
             assert_eq!(create_collection_template(collection), expected);
@@ -436,6 +439,7 @@ created: 2023-03-08
 poems:
 - name1
 ---
+
 A description of the contents
 ";
             let expected = CollectionData {
