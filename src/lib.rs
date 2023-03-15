@@ -7,22 +7,40 @@ use std::path::PathBuf;
 use walkdir::WalkDir;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let collections: HashMap<String, Vec<String>> = WalkDir::new(config.path)
+    // maybe I should glob for md files instead, getting pngs and stuff
+    let collections: HashMap<String, Vec<String>> = WalkDir::new(&config.path)
         .into_iter()
         .filter_map(|f| {
             let a = f.unwrap();
             if a.metadata().unwrap().is_dir() {
                 return None;
             }
-            let r = fs::read_to_string(a.path()).unwrap();
-            let t = get_tags(&r).unwrap();
+            // these match statements with return could be refactored to use if/let syntax
+            let file_name = match a.file_name().to_str() {
+                Some(n) => n.to_string(),
+                None => return None,
+            }; // FIXME file name currently contains extension, which isn't what should be in the output.
+            let file_contents = match fs::read_to_string(a.path()) {
+                Ok(contents) => contents,
+                Err(e) => {
+                    eprintln!("Failed to read file: {file_name}, {e}");
+                    return None;
+                }
+            };
+            let t = match get_tags(&file_contents) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Failed to read tags for {file_name}, {e}");
+                    return None;
+                } // skip stuff that doesn't have tags
+            };
             // skip unpublished poems
             if is_published(&t) {
-                let collections = parse_collections(t.get("collections").unwrap());
-                return Some((
-                    a.file_name().to_str().unwrap().to_string(),
-                    collections.clone(),
-                ));
+                let collections = match t.get("collections") {
+                    Some(c) => parse_collections(c),
+                    None => return None, // no collections, we leave now
+                };
+                return Some((file_name, collections.clone()));
             } else {
                 return None;
             }
@@ -35,7 +53,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         );
 
     let collection_data = collections.iter().map(|(collection_name, poems)| {
-        let path = format!("**/{collection_name}.md");
+        let source_dir = &config.path;
+        let path = format!("{source_dir}/**/{collection_name}.md");
         let existing_collections = glob(&path)
             .expect("Failed to read glob pattern")
             .map(|x| x.unwrap())
@@ -53,11 +72,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     });
 
     collection_data.for_each(|(collection_name, collection_data)| {
+        let target_dir = &config.target_dir;
         let template = create_collection_template(collection_data);
-        let mut target_path = PathBuf::from(&config.target_dir).join(collection_name);
+        let mut target_path = PathBuf::from(target_dir).join(collection_name);
         target_path.set_extension("md");
-        dbg!(template.clone());
         fs::write(target_path, template).unwrap();
+        println!("Wrote collection {collection_name} to {target_dir}");
     });
 
     Ok(())
@@ -99,7 +119,7 @@ fn update_collection_poems(collection: CollectionData, poems: Vec<String>) -> Co
 }
 
 fn parse_collections(raw: &str) -> Vec<String> {
-    raw.trim().split(' ').map(|a| a.to_string()).collect()
+    raw.trim().split(", ").map(|a| a.to_string()).collect()
 }
 
 fn is_published(tags: &HashMap<String, String>) -> bool {

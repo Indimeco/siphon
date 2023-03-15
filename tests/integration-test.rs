@@ -17,7 +17,7 @@ fn test_write_collection() {
 title: sample collection
 created: 2021-06-20
 poems:
-- 2021-05-30.md
+- 2021-05-30
 ---
 
 a description of the sample
