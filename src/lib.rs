@@ -4,23 +4,25 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
-use walkdir::WalkDir;
+
+// TODO copy published poems to target dir
+// TODO clean up draft parts of published poems?
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    // maybe I should glob for md files instead, getting pngs and stuff
-    let collections: HashMap<String, Vec<String>> = WalkDir::new(&config.path)
-        .into_iter()
-        .filter_map(|f| {
-            let a = f.unwrap();
-            if a.metadata().unwrap().is_dir() {
+    let source_dir = &config.path;
+    let md_pattern = format!("{source_dir}/**/*.md");
+    let collections = glob(&md_pattern)
+        .expect("Failed to read glob pattern")
+        .filter_map(|glob_result| {
+            let path_buf = glob_result.unwrap();
+            if path_buf.metadata().unwrap().is_dir() {
                 return None;
             }
-            // these match statements with return could be refactored to use if/let syntax
-            let file_name = match a.file_name().to_str() {
-                Some(n) => n.to_string(),
+            let file_name = match path_buf.file_name().unwrap().to_str() {
+                Some(n) => n.strip_suffix(".md").unwrap().to_string(),
                 None => return None,
-            }; // FIXME file name currently contains extension, which isn't what should be in the output.
-            let file_contents = match fs::read_to_string(a.path()) {
+            };
+            let file_contents = match fs::read_to_string(path_buf.as_path()) {
                 Ok(contents) => contents,
                 Err(e) => {
                     eprintln!("Failed to read file: {file_name}, {e}");
@@ -84,7 +86,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 }
 
 pub struct Config {
-    pub dryrun: bool,
     pub path: String,
     pub target_dir: String,
 }
@@ -102,12 +103,7 @@ impl Config {
             None => return Err("Target dir not specified"),
         };
 
-        // TODO Read dryrun from args somehow
-        Ok(Config {
-            path,
-            dryrun: true,
-            target_dir,
-        })
+        Ok(Config { path, target_dir })
     }
 }
 

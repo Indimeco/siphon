@@ -10,7 +10,6 @@ fn test_write_collection() {
     let test_config = siphon::Config {
         target_dir: String::from(target_dir.path().to_str().unwrap()),
         path: String::from(test_path.to_str().unwrap()),
-        dryrun: false,
     };
     let expected_output = "\
 ---
