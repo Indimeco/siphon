@@ -5,12 +5,21 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
-// TODO copy published poems to target dir
-// TODO clean up draft parts of published poems?
+// TODO clean draft poems
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let source_dir = &config.path;
+    let target_dir = &config.target_dir;
     let md_pattern = format!("{source_dir}/**/*.md");
+    let target_collections_dir = format!("{target_dir}/collections/");
+    let target_poems_dir = format!("{target_dir}/poems/");
+
+    // clean existing dirs
+    fs::remove_dir_all(&target_collections_dir);
+    fs::remove_dir_all(&target_poems_dir);
+    fs::create_dir(&target_collections_dir).expect("Cannot create collections dir");
+    fs::create_dir(&target_poems_dir).expect("Cannot create poems dir");
+
     let collections = glob(&md_pattern)
         .expect("Failed to read glob pattern")
         .filter_map(|glob_result| {
@@ -42,6 +51,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                     Some(c) => parse_collections(c),
                     None => return None, // no collections, we leave now
                 };
+                let target_path = format!("{target_poems_dir}/{file_name}.md");
+                // lol side effect inside a map, should move this out
+                fs::write(&target_path, file_contents).unwrap();
+                println!("Wrote poem: {target_path}");
                 return Some((file_name, collections.clone()));
             } else {
                 return None;
@@ -55,7 +68,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         );
 
     let collection_data = collections.iter().map(|(collection_name, poems)| {
-        let source_dir = &config.path;
         let path = format!("{source_dir}/**/{collection_name}.md");
         let existing_collections = glob(&path)
             .expect("Failed to read glob pattern")
@@ -74,12 +86,12 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     });
 
     collection_data.for_each(|(collection_name, collection_data)| {
-        let target_dir = &config.target_dir;
         let template = create_collection_template(collection_data);
-        let mut target_path = PathBuf::from(target_dir).join(collection_name);
+        let mut target_path = PathBuf::from(&target_collections_dir).join(collection_name);
         target_path.set_extension("md");
-        fs::write(target_path, template).unwrap();
-        println!("Wrote collection {collection_name} to {target_dir}");
+        fs::write(&target_path, template).unwrap();
+        let target_path_str = target_path.to_str().unwrap();
+        println!("Wrote collection: {target_path_str}");
     });
 
     Ok(())

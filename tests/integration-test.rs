@@ -22,7 +22,12 @@ poems:
 a description of the sample
 ";
     siphon::run(test_config).expect("Run failed");
-    let file_output = fs::read_to_string(target_dir.path().join("sample.md"))
+    let file_output = fs::read_to_string(target_dir.path().join("collections/sample.md"))
         .expect("Collection output file should exist");
     assert_eq!(expected_output, file_output);
+    let original_poem =
+        fs::read_to_string(test_path.join("2021-05-30.md")).expect("Original poem should exist");
+    let copied_poem = fs::read_to_string(target_dir.path().join("poems/2021-05-30.md"))
+        .expect("Copied poem should exist");
+    assert_eq!(copied_poem, original_poem);
 }
