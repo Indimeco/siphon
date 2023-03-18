@@ -5,8 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 mod collections;
-
-// TODO clean draft poems
+mod poems;
 
 pub struct Config {
     pub path: String,
