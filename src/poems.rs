@@ -1,16 +1,15 @@
 use regex::RegexBuilder;
 
 pub fn clean_drafts(poem: &str) -> &str {
-    // FIXME regex doesn't support look around...
-    let regex_without_draft = RegexBuilder::new("(---.*---.*)(?=---)")
+    RegexBuilder::new("(---.*?---.*?)((---)|$)")
         .dot_matches_new_line(true)
         .build()
-        .unwrap();
-
-    match regex_without_draft.captures(poem) {
-        Some(captures) => captures.get(0).unwrap().as_str(),
-        None => poem,
-    }
+        .unwrap()
+        .captures(poem)
+        .unwrap()
+        .get(1)
+        .unwrap()
+        .as_str()
 }
 
 #[cfg(test)]
@@ -36,7 +35,7 @@ ducky
         let contents = "\
 ---
 collections: sample
-publish: trueU
+publish: true
 ---
 
 ducky

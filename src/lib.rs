@@ -75,7 +75,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 };
                 let target_path = format!("{target_poems_dir}/{file_name}.md");
                 // lol side effect inside a map, should move this out
-                fs::write(&target_path, file_contents).unwrap();
+                fs::write(&target_path, poems::clean_drafts(&file_contents)).unwrap();
                 println!("Wrote poem: {target_path}");
                 return Some((file_name, collections.clone()));
             } else {
