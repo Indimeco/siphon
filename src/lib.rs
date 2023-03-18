@@ -53,6 +53,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 Some(n) => n.strip_suffix(".md").unwrap().to_string(),
                 None => return None,
             };
+
+            // skip foreign language stuff
             let file_contents = match fs::read_to_string(path_buf.as_path()) {
                 Ok(contents) => contents,
                 Err(e) => {
@@ -60,27 +62,34 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                     return None;
                 }
             };
-            let t = match collections::get_tags(&file_contents) {
+
+            // skip stuff that doesn't have tags
+            let tags = match collections::get_tags(&file_contents) {
                 Ok(v) => v,
                 Err(e) => {
                     eprintln!("Failed to read tags for {file_name}, {e}");
                     return None;
-                } // skip stuff that doesn't have tags
+                }
             };
+
             // skip unpublished poems
-            if collections::is_published(&t) {
-                let collections = match t.get("collections") {
+            if collections::is_published(&tags) {
+                // skip poems without collections
+                let collections = match tags.get("collections") {
                     Some(c) => collections::parse_collections(c),
-                    None => return None, // no collections, we leave now
+                    None => return None,
                 };
+
+                // write valid poems to target dir
                 let target_path = format!("{target_poems_dir}/{file_name}.md");
-                // lol side effect inside a map, should move this out
                 fs::write(&target_path, poems::clean_drafts(&file_contents)).unwrap();
                 println!("Wrote poem: {target_path}");
+
+                // return collection data for further processing
                 return Some((file_name, collections.clone()));
-            } else {
-                return None;
             }
+
+            return None;
         })
         .fold(
             HashMap::new(),
